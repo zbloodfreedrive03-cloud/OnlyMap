@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Clean GPS Navigation</title>
+
+  <!-- MapLibre GL CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: rgba(22, 27, 34, 0.85);
+      --border: rgba(255, 255, 255, 0.1);
+      --accent: #2f6bff;
+      --text: #f0f6fc;
+      --sub: #8b949e;
+      --done: #b9c3d6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); user-select: none; }
+
+    #map { width: 100%; height: 100%; position: absolute; inset: 0; }
+    
+    /* ซ่อน Attribution ส่วนเกินเพื่อความคลีน */
+    .maplibregl-ctrl-bottom-left { bottom: 12px !important; left: 12px !important; opacity: 0.6; }
+
+    /* Top Search Bar */
+    .top-bar {
+      position: absolute; top: 16px; left: 16px; right: 16px; z-index: 10;
+      display: flex; flex-direction: column; gap: 8px; max-width: 480px; margin: 0 auto;
+    }
+    .search-box {
+      display: flex; align-items: center; background: var(--card-bg);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3); transition: all 0.2s ease;
+    }
+    .search-box:focus-within { border-color: var(--accent); box-shadow: 0 8px 32px rgba(47, 107, 255, 0.25); }
+    .search-box input {
+      flex: 1; background: transparent; border: none; color: var(--text);
+      font-size: 15px; outline: none; padding: 8px 6px;
+    }
+    .search-box input::placeholder { color: var(--sub); }
+    .btn-icon-setting {
+      background: rgba(255,255,255,0.08); border: none; color: var(--text);
+      width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+      cursor: pointer; transition: 0.2s; flex-shrink: 0;
+    }
+    .btn-icon-setting:active { transform: scale(0.92); }
+
+    /* Search Results Dropdown */
+    .results {
+      background: var(--card-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border); border-radius: 16px; max-height: 240px; overflow-y: auto;
+      display: none; flex-direction: column; box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    }
+    .results.show { display: flex; }
+    .res-item {
+      padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;
+      display: flex; flex-direction: column; gap: 2px; text-align: left; background: none; border-x: none; border-top: none; color: var(--text);
+    }
+    .res-item:hover, .res-item:active { background: rgba(255,255,255,0.08); }
+    .res-item b { font-size: 14px; font-weight: 600; }
+    .res-item span { font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Floating Controls Right Side */
+    .controls {
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%); z-index: 10;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .btn-ctrl {
+      width: 46px; height: 46px; border-radius: 50%; background: var(--card-bg);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border); color: var(--text); display: grid; place-items: center;
+      cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,0.3); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    .btn-ctrl:active { transform: scale(0.9); }
+    .btn-ctrl.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    
+    /* Progress ring for lock timer */
+    .ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+    .ring-circle { stroke: #fff; stroke-width: 3; fill: transparent; stroke-dasharray: 135; stroke-dashoffset: 135; transition: stroke-dashoffset 0.1s linear; }
+
+    /* Bottom Card (HUD) */
+    .hud-card {
+      position: absolute; bottom: 24px; left: 16px; right: 16px; z-index: 10;
+      max-width: 480px; margin: 0 auto; background: var(--card-bg);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border); border-radius: 24px; padding: 20px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 16px;
+      transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.3s;
+    }
+    .hud-card[data-mode="hidden"] { transform: translateY(120%); opacity: 0; pointer-events: none; }
+    
+    /* HUD Modes */
+    .preview-mode, .progress-mode { display: none; }
+    .hud-card[data-mode="preview"] .preview-mode { display: flex; flex-direction: column; gap: 14px; }
+    .hud-card[data-mode="progress"] .progress-mode { display: flex; flex-direction: column; gap: 14px; }
+
+    .btn-main {
+      width: 100%; padding: 14px; border-radius: 16px; border: none; background: var(--accent);
+      color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-main:active { transform: scale(0.98); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.1); color: var(--text); border: none; padding: 10px 16px;
+      border-radius: 12px; font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+
+    /* Percentage Visual Counter */
+    .pct-container { display: flex; align-items: baseline; justify-content: space-between; }
+    .pct-val { font-size: 38px; font-weight: 800; tracking: -1px; font-variant-numeric: tabular-nums; }
+    .pct-val small { font-size: 20px; font-weight: 600; opacity: 0.7; }
+    .progress-bar-bg { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 99px; overflow: hidden; position: relative; }
+    .progress-bar-fill { height: 100%; width: calc(var(--p, 0) * 100%); background: linear-gradient(90deg, var(--accent), #60a5fa); border-radius: 99px; transition: width 0.1s linear; }
+
+    /* Custom Marker Styles */
+    .me { width: 44px; height: 44px; display: grid; place-items: center; position: relative; transform: translate(-50%, -50%); }
+    .me .pulse { position: absolute; inset: 4px; border-radius: 50%; background: var(--c, var(--accent)); opacity: 0.25; animation: pulseRing 2s infinite; }
+    .me .icon { width: 32px; height: 32px; display: grid; place-items: center; z-index: 2; }
+    .me img.imgicon { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .me .emo { font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+    @keyframes pulseRing { 0% { transform: scale(0.8); opacity: 0.4; } 100% { transform: scale(2.2); opacity: 0; } }
+
+    /* Modal Sheet for Icon Customizer */
+    .sheet {
+      position: absolute; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    }
+    .sheet.open { opacity: 1; pointer-events: auto; }
+    .sheet-body {
+      width: 100%; max-width: 480px; background: #161b22; border-radius: 28px 28px 0 0; padding: 24px;
+      display: flex; flex-direction: column; gap: 20px; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
+    }
+    .sheet.open .sheet-body { transform: translateY(0); }
+    .grid-opts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 8px; }
+    .opt-btn {
+      aspect-ratio: 1; border-radius: 16px; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      display: grid; place-items: center; font-size: 22px; cursor: pointer; transition: 0.2s; color: var(--text);
+    }
+    .opt-btn.sel { border-color: var(--accent); background: rgba(47,107,255,0.2); }
+
+    /* Toast Notification */
+    .toast {
+      position: absolute; top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px); z-index: 90;
+      background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); border: 1px solid var(--border);
+      padding: 10px 18px; border-radius: 99px; font-size: 13px; opacity: 0; pointer-events: none; transition: 0.25s;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    
+    #err { display: none; position: absolute; inset: 0; z-index: 999; background: #000; color: #ff5555; padding: 30px; font-family: monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+
+  <div id="err"></div>
+  <div id="toast" class="toast"></div>
+
+  <!-- Map Container -->
+  <div id="map"></div>
+
+  <!-- Top Search Bar -->
+  <div class="top-bar">
+    <div class="search-box">
+      <input type="text" id="q" placeholder="ค้นหาจุดหมายปลายทาง…" autocomplete="off">
+      <button class="btn-icon-setting" id="qClear" hidden>✕</button>
+      <button class="btn-icon-setting" id="btnIcon" title="ตั้งค่าไอคอน">🎨</button>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <!-- Map Controls -->
+  <div class="controls">
+    <button class="btn-ctrl" id="btnLock" title="ล็อกมุมกล้อง">
+      <svg class="ring-svg" viewBox="0 0 50 50">
+        <circle class="ring-circle" cx="25" cy="25" r="21" />
+      </svg>
+      🧭
+    </button>
+    <button class="btn-ctrl" id="btnLoc" title="ตำแหน่งปัจจุบัน">🎯</button>
+    <button class="btn-ctrl" id="btnIn" title="ซูมเข้า">＋</button>
+    <button class="btn-ctrl" id="btnOut" title="ซูมออก">－</button>
+  </div>
+
+  <!-- Bottom HUD Card -->
+  <div class="hud-card" id="card" data-mode="hidden">
+    <!-- Preview Mode -->
+    <div class="preview-mode">
+      <div>
+        <div style="font-size: 13px; color: var(--sub);" id="pvSub">กำลังคำนวณเส้นทาง…</div>
+        <div style="font-size: 20px; font-weight: 700; margin-top: 2px;" id="pvName">จุดหมาย</div>
+        <div style="font-size: 24px; font-weight: 800; color: var(--accent); margin-top: 4px;" id="pvMain">-- กม.</div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-secondary" style="flex: 1;" data-cancel>ยกเลิก</button>
+        <button class="btn-main" style="flex: 2;" id="btnGo">เริ่มนำทาง 🚀</button>
+      </div>
+    </div>
+
+    <!-- Progress Navigation Mode -->
+    <div class="progress-mode">
+      <div class="pct-container">
+        <div>
+          <div style="font-size: 13px; color: var(--sub);" id="destName">กำลังเดินทาง</div>
+          <div class="pct-val"><span id="pctInt">0</span>.<small id="pctDec">0</small>%</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 14px; font-weight: 700; color: #4ade80;" id="remain">-- ม.</div>
+          <div style="font-size: 12px; color: var(--sub);" id="eta">--:--</div>
+        </div>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="bar"></div>
+      </div>
+      <button class="btn-secondary" style="width: 100%; border-radius: 14px;" data-cancel>สิ้นสุดการนำทาง</button>
+    </div>
+  </div>
+
+  <!-- Icon Setting Sheet -->
+  <div class="sheet" id="sheet">
+    <div class="sheet-body">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-size: 18px; font-weight: 700;">ปรับแต่งไอคอนของคุณ</h3>
+        <button class="btn-secondary" id="sheetBg" style="padding: 6px 12px; border-radius: 99px;">ปิด</button>
+      </div>
+      
+      <div>
+        <label style="font-size: 13px; color: var(--sub);">เลือกไอคอนแสดงตำแหน่ง</label>
+        <div class="grid-opts" id="iconGrid"></div>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <div style="flex: 1;">
+          <label style="font-size: 13px; color: var(--sub); display: block; margin-bottom: 6px;">เลือกสีไอคอน</label>
+          <input type="color" id="colorIn" style="width: 100%; height: 40px; border: none; border-radius: 10px; cursor: pointer; background: transparent;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 13px; color: var(--sub); display: block; margin-bottom: 6px;">หรือใช้อัปโหลดรูปภาพ</label>
+          <input type="file" id="fileIn" accept="image/*" style="display: none;">
+          <button class="btn-secondary" style="width: 100%; height: 40px;" onclick="document.getElementById('fileIn').click()">🖼️ เลือกรูปภาพ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
