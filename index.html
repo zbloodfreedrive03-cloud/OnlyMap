@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#f4f6fa">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Clean GPS</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map"></div>
+
+<div class="controls">
+  <button id="btnLock" class="fab" aria-label="ล็อกมุมกล้อง">
+    <svg class="ring" viewBox="0 0 56 56"><circle cx="28" cy="28" r="26"/></svg>
+    <svg class="ic fillable" viewBox="0 0 24 24"><path d="M12 2.5 19.5 21 12 17l-7.5 4z"/></svg>
+  </button>
+  <button id="btnLoc" class="fab" aria-label="กลับมาที่ตำแหน่งฉัน">
+    <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="7.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+  </button>
+  <button id="btnIn" class="fab" aria-label="ซูมเข้า">
+    <svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+  <button id="btnOut" class="fab" aria-label="ซูมออก">
+    <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
+  </button>
+  <button id="btnIcon" class="fab" aria-label="เปลี่ยนไอคอนตำแหน่ง">
+    <svg class="ic" viewBox="0 0 24 24"><path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z"/><circle cx="12" cy="11" r="2.2"/></svg>
+  </button>
+</div>
+
+<div id="card" class="card" data-mode="hidden">
+  <div class="sec preview">
+    <div class="pv-info">
+      <div class="pv-main" id="pvMain">–</div>
+      <div class="pv-sub" id="pvSub"></div>
+    </div>
+    <button id="btnGo" class="go" disabled>เริ่ม</button>
+    <button class="x" data-cancel aria-label="ยกเลิก">×</button>
+  </div>
+  <div class="sec progress">
+    <div class="row">
+      <div class="pct"><span id="pctInt">0</span><span class="pct-dec">.<span id="pctDec">0</span>%</span></div>
+      <button class="x" data-cancel aria-label="ยกเลิก">×</button>
+    </div>
+    <div class="bar" id="bar"><i></i><b></b></div>
+    <div class="meta"><span id="remain">–</span><span id="eta">–</span></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="sheet" class="sheet">
+  <div class="backdrop" id="sheetBg"></div>
+  <div class="panel">
+    <div class="grab"></div>
+    <h3>ไอคอนตำแหน่งของฉัน</h3>
+    <div class="grid" id="iconGrid"></div>
+    <div class="row2">
+      <label class="pill">สี <input type="color" id="colorIn" value="#2f6bff"></label>
+      <label class="pill">อัปโหลดรูป <input type="file" id="fileIn" accept="image/*" hidden></label>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
